@@ -27,21 +27,40 @@
   <script src="https://secure.aadcdn.microsoftonline-p.com/lib/1.0.0/js/msal.js"></script>
   <script src="https://code.jquery.com/jquery-3.2.1.min.js" class="pre"></script>
 
-  <h2>Getting an access token with Azure AD B2C and calling a Web API</h2>
+  <!--h2>Getting an access token with Azure AD B2C and calling a Web API</h2-->
+  <h2>MSAL.js + Azure AD B2C Scenarios</h2>
+  <div id="welcome-msg"></div>
+
+  <br>
   <div>
-    <div id="label">Sign-in with Microsoft Azure AD B2C</div>
+    <div id="label"><b>Scenario 1</b>: Sign-in with Azure AD B2C from a SPA</div>
     <button id="auth" onclick="login()">Login</button>
+  </div>
+ 
+  <br>
+  <div>
+    <div id="label"><b>Scenario 2</b>: Call a protected web api using same access token from Scenario 1</div>
     <button id="callApiButton" class="hidden" onclick="callApi()">Call Web API</button>
   </div>
 
-  <pre class="response"></pre>
+  <br>
+  <div>
+    <div id="label"><b>Scenario 3a</b>: SSO to a another SPA using the same access token from Scneario 1</div>
+    <a id="ssoSpaLink" href="http://localhost:6421" class="hidden">Another SPA</a>
+    <div>Note: SPAs served from 'localhost' on different ports are treated similar to apps on differnent domains.
+      See MSAL SSO refernece to this scenario <a href="https://docs.microsoft.com/en-us/azure/active-directory/develop/msal-js-sso#applications-on-different-domain">here</a>.
+    </div>
+  </div>
 
+  <br>
+  <pre class="response"></pre>
+ 
   <script class="pre">
 
     // The current application coordinates were pre-registered in a B2C tenant.
     var appConfig = {
-      b2cScopes: ["https://fabrikamb2c.onmicrosoft.com/helloapi/demo.read"],
-      webApi: "https://fabrikamb2chello.azurewebsites.net/hello"
+      b2cScopes: ["https://wabbit1317b2c.onmicrosoft.com/hello/demo.read"],
+      webApi: "http://localhost:5000/hello"
     };
   </script>
 
@@ -51,8 +70,8 @@
     // configuration to initialize msal
     var msalConfig = {
         auth: {
-            clientId: "e760cab2-b9a1-4c0d-86fb-ff7084abd902", //This is your client ID
-            authority: "https://fabrikamb2c.b2clogin.com/fabrikamb2c.onmicrosoft.com/b2c_1_susi", //This is your tenant info
+            clientId: "6878b5e6-e911-47bb-8324-891ca5e2236d", //This is your client ID
+            authority: "https://wabbit1317b2c.b2clogin.com/tfp/wabbit1317b2c.onmicrosoft.com/B2C_1_SignUpnInV2", //This is your tenant info
             validateAuthority: false
         },
         cache: {
@@ -62,6 +81,8 @@
     };
 
     var clientApplication = new Msal.UserAgentApplication(msalConfig);
+
+    autoLogin();
 
     // Register a call back for redirect flow
     // myMSALObj.handleRedirectCallback(authRedirectCallback);
@@ -98,10 +119,18 @@
       var authButton = document.getElementById('auth');
       authButton.innerHTML = 'logout';
       authButton.setAttribute('onclick', 'logout();');
-      var label = document.getElementById('label');
-      label.innerText = "Hello " + userName;
+
+      var welcomeMsg = document.getElementById('welcome-msg');
+      welcomeMsg.innerText = "Hello " + userName;
+      
       var callWebApiButton = document.getElementById('callApiButton');
       callWebApiButton.setAttribute('class', 'visible');
+
+      var ssoSpaLink = document.getElementById('ssoSpaLink');
+      ssoSpaLink.setAttribute('class', 'visible');
+
+      var ssoBtwnTabs = document.getElementById('ssoBtwnTabs');
+      ssoBtwnTabs.setAttribute('class', 'visible');
     }
 
     function callApi() {
@@ -142,6 +171,18 @@
 
     function logMessage(s) {
       document.body.querySelector('.response').appendChild(document.createTextNode('\n' + s));
+    }
+
+    // auto login if spa request came from another authenicated spa
+    function autoLogin() {
+      var tokenRequest = {
+        scopes: appConfig.b2cScopes
+      }
+      clientApplication.acquireTokenSilent(tokenRequest).then(function (tokenResponse) {
+        updateUI();
+      }).catch(function (error) {
+        // do nothing - means no existing token present, let the user manually log in
+      })
     }
 
   </script>
