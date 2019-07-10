@@ -24,17 +24,26 @@
   <!-- bluebird only needed if this page needs to run on Internet Explorer -->
   <!-- msal.min.js can be used in the place of msal.js; included msal.js to make debug easy -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/bluebird/3.3.4/bluebird.min.js" class="pre"></script>
-  <script src="https://secure.aadcdn.microsoftonline-p.com/lib/1.0.0/js/msal.js"></script>
+  <script src="https://secure.aadcdn.microsoftonline-p.com/lib/1.0.2/js/msal.js"></script>
   <script src="https://code.jquery.com/jquery-3.2.1.min.js" class="pre"></script>
 
   <!--h2>Getting an access token with Azure AD B2C and calling a Web API</h2-->
   <h2>MSAL.js + Azure AD B2C Scenarios</h2>
-  <div id="welcome-msg"></div>
+  <div>
+    <div id="loginTypeBar"><b>Login experience:</b>: 
+      <select id="loginType" onchange="changeLoginBtnAction()">
+          <option value="popup">Popup Login</option>
+          <option value="redirect">Redirect Login</option>
+      </select>
+    </div>
+  </div>
+  <br>
 
+  <div id="welcome-msg"></div>
   <br>
   <div>
     <div id="label"><b>Scenario 1</b>: Sign-in with Azure AD B2C from a SPA</div>
-    <button id="auth" onclick="login()">Login</button>
+    <button id="loginBtn" onclick='loginViaPopup()'>Login</button>
   </div>
  
   <br>
@@ -72,7 +81,7 @@
         auth: {
             clientId: "6878b5e6-e911-47bb-8324-891ca5e2236d", //This is your client ID
             authority: "https://wabbit1317b2c.b2clogin.com/tfp/wabbit1317b2c.onmicrosoft.com/B2C_1_SignUpnInV2", //This is your tenant info
-            validateAuthority: false
+            validateAuthority: false // must set to false when using b2clogin domain as per https://github.com/AzureAD/microsoft-authentication-library-for-js/issues/435
         },
         cache: {
             cacheLocation: "localStorage",
@@ -81,22 +90,19 @@
     };
 
     var clientApplication = new Msal.UserAgentApplication(msalConfig);
-
-    autoLogin();
-
     // Register a call back for redirect flow
-    // myMSALObj.handleRedirectCallback(authRedirectCallback);
+    clientApplication.handleRedirectCallback(authRedirectCallBack);
 
-    function login() {
+    var tokenRequest = { scopes: appConfig.b2cScopes };
 
-      var loginRequest = {
-        scopes: appConfig.b2cScopes
-      };
+    if (clientApplication.getAccount() && !clientApplication.isCallback(window.location.hash)) {// avoid duplicate code execution on page load in case of iframe and popup window.
+      // autologin if the valid token already exist
+      autoLogin();
+    }
 
-      clientApplication.loginPopup(loginRequest).then(function (loginResponse) {
-        var tokenRequest = {
-          scopes: appConfig.b2cScopes
-        };
+    function loginViaPopup() {      
+
+      clientApplication.loginPopup(tokenRequest).then(function (loginResponse) {
 
         clientApplication.acquireTokenSilent(tokenRequest).then(function (tokenResponse) {
           updateUI();
@@ -112,28 +118,25 @@
       });
     }
 
-    function updateUI() {
-      var userName = clientApplication.getAccount().name;
-      console.log(clientApplication.getAccount());
-      logMessage("User '" + userName + "' logged-in");
-      var authButton = document.getElementById('auth');
+    function loginViaRedirect(){
+      var loginRequest = {
+        scopes: appConfig.b2cScopes
+      };
+      clientApplication.loginRedirect(tokenRequest);
+    }
+    
+    function updateUI(loginType) {
+      var authButton = document.getElementById('loginBtn');
       authButton.innerHTML = 'logout';
       authButton.setAttribute('onclick', 'logout();');
 
-      var welcomeMsg = document.getElementById('welcome-msg');
-      welcomeMsg.innerText = "Hello " + userName;
-      
-      var callWebApiButton = document.getElementById('callApiButton');
-      callWebApiButton.setAttribute('class', 'visible');
-
-      var ssoSpaLink = document.getElementById('ssoSpaLink');
-      ssoSpaLink.setAttribute('class', 'visible');
+      document.getElementById('welcome-msg').innerText = "Hello " + clientApplication.getAccount().name;;
+      document.getElementById('callApiButton').setAttribute('class', 'visible');
+      document.getElementById('ssoSpaLink').setAttribute('class', 'visible');
+      document.getElementById("loginTypeBar").setAttribute('class', 'hidden');
     }
 
     function callApi() {
-      var tokenRequest = {
-        scopes: appConfig.b2cScopes
-      }
       clientApplication.acquireTokenSilent(tokenRequest).then(function (tokenResponse) {
         callApiWithAccessToken(tokenResponse.accessToken);
       }).catch(function (error) {
@@ -172,9 +175,7 @@
 
     // auto login if spa request came from another authenicated spa
     function autoLogin() {
-      var tokenRequest = {
-        scopes: appConfig.b2cScopes
-      }
+      console.log('autologging');
       clientApplication.acquireTokenSilent(tokenRequest).then(function (tokenResponse) {
         updateUI();
       }).catch(function (error) {
@@ -182,6 +183,24 @@
       })
     }
 
+    // change the authBtn click to either loginViaPopup or loginViaRedirect based on the loginType 
+    function changeLoginBtnAction(){
+      var loginTypeDDLB = document.getElementById("loginType");
+      var selectedLoginType = loginTypeDDLB.options[loginTypeDDLB.selectedIndex].value;
+      var authButton = document.getElementById('loginBtn');
+      authButton.setAttribute('onclick', 'popup'==selectedLoginType ? 'loginViaPopup();' : 'loginViaRedirect();');
+    }
+
+    // ref: https://docs.microsoft.com/en-us/azure/active-directory/develop/tutorial-v2-javascript-spa
+    //This function is called after loginRedirect and acquireTokenRedirect. Use tokenType to determine context. 
+    //For loginRedirect, tokenType = "id_token". For acquireTokenRedirect, tokenType:"access_token".
+    function authRedirectCallBack(error, response) {
+      if (error) {
+        console.log(error);
+      } else {
+        //do nothing for now
+      }
+    }
   </script>
 </body>
 
